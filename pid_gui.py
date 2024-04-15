@@ -138,7 +138,7 @@ def uploadmission(aFileName):
 
 uploadmission('/home/yash/Downloads/random2.waypoints')
 
-
+time.sleep(1)
 #takeoff
 master.mav.command_long_send(
     master.target_system,
@@ -158,14 +158,14 @@ def pread(param_name):
     param_value = param_value_msg.param_value
     return param_value
 
-
+time.sleep(1)
 #start automission
 master.mav.command_long_send(master.target_system, master.target_component,
                                 300 , 0, 0, 0, 0, 0, 0, 0, 0)
 msg = master.recv_match(type='COMMAND_ACK', blocking=True)
 print(msg)
 
-tms=500
+tms=500 #refresh rate (ms)
 def update():
     a=pread('ATC_RAT_RLL_P')
     rollp.config(text=round(a,6))
@@ -189,10 +189,8 @@ def update():
     
 
 root = Tk()
-def hello():
-    print("hello")
 root.title('PID Tuning')
-root.geometry('700x400')
+root.geometry('500x200')
 
 frame1=Frame(root)
 frame1.pack()
@@ -206,15 +204,21 @@ frame3.pack()
 w = Label(frame1, text='Enter rate change percentage:')
 w.grid(row=0,column=0)
 
-def button_func(pname, entry_string):
+def button_func(pname, entry_string, type):
     print(pname)
-    print(entry_string.get())
     perc=float(entry_string.get())/100
     print(f'percentage={perc}')
     read=(pread(pname))
-    setval=read*(1+perc)
-    print(f"{pname}={read}")
-    print(f'newvalue={setval}')
+    print(f"old value={read}")
+    n=1
+    if(type==1):
+        if(read==0):
+            read=1
+            n=0
+        setval=read*(n+perc)
+    elif(type==-1):
+        setval=read*(1-perc)
+    print(f'new value={setval}')
     master.mav.param_set_send(
     master.target_system,
     master.target_component,
@@ -230,38 +234,56 @@ entry_string = StringVar(value = '0')
 e=Entry(frame1, cursor='circle', textvariable = entry_string, width= 5)
 e.grid(row=0,column=1)
 
-Label(frame2, text='Rate Roll', bg='green').grid(row=0,column=0,padx=10,pady=10) #roll
+Label(frame2, text='Rate Roll', bg='green').grid(row=0,column=0,padx=50,pady=10) #roll
 Label(frame3, text='P').grid(row=0,column=0, padx=3)
-rollp=Button(frame3, command = lambda: button_func('ATC_RAT_RLL_P',entry_string))
-rollp.grid(row=0,column=1, padx=15)
+rollp=Label(frame3)
+rollp.grid(row=0,column=1)
+Button(frame3, text='+', command = lambda: button_func('ATC_RAT_RLL_P',entry_string,1)).grid(row=0,column=2)
+Button(frame3, text='-', command = lambda: button_func('ATC_RAT_RLL_P',entry_string,-1)).grid(row=0,column=3)
 Label(frame3, text='I').grid(row=1,column=0, padx=3)
-rolli=Button(frame3, command = lambda: button_func('ATC_RAT_RLL_I',entry_string))
-rolli.grid(row=1,column=1, padx=15)
+rolli=Label(frame3)
+rolli.grid(row=1,column=1)
+Button(frame3, text='+', command = lambda: button_func('ATC_RAT_RLL_I',entry_string,1)).grid(row=1,column=2)
+Button(frame3, text='-', command = lambda: button_func('ATC_RAT_RLL_I',entry_string,-1)).grid(row=1,column=3)
 Label(frame3, text='D').grid(row=2,column=0, padx=3)
-rolld=Button(frame3, command = lambda: button_func('ATC_RAT_RLL_D',entry_string))
-rolld.grid(row=2,column=1, padx=15)
+rolld=Label(frame3)
+rolld.grid(row=2,column=1)
+Button(frame3, text='+', command = lambda: button_func('ATC_RAT_RLL_D',entry_string,1)).grid(row=2,column=2)
+Button(frame3, text='-', command = lambda: button_func('ATC_RAT_RLL_D',entry_string,-1)).grid(row=2,column=3)
 
-Label(frame2, text='Rate Pitch', bg='green').grid(row=0,column=1,padx=10,pady=10) #pitch
-Label(frame3, text='P').grid(row=0,column=2, padx=3)
-pitchp=Button(frame3, command = lambda: button_func('ATC_RAT_PIT_P',entry_string))
-pitchp.grid(row=0,column=3, padx=15)
-Label(frame3, text='I').grid(row=1,column=2, padx=3)
-pitchi=Button(frame3, command = lambda: button_func('ATC_RAT_PIT_I',entry_string))
-pitchi.grid(row=1,column=3, padx=15)
-Label(frame3, text='D').grid(row=2,column=2, padx=3)
-pitchd=Button(frame3, command = lambda: button_func('ATC_RAT_PIT_D',entry_string))
-pitchd.grid(row=2,column=3, padx=15)
-
-Label(frame2, text='Rate Yaw', bg='green').grid(row=0,column=2,padx=10,pady=10) #pitch
+Label(frame2, text='Rate Pitch', bg='green').grid(row=0,column=1,padx=50,pady=10) #pitch
 Label(frame3, text='P').grid(row=0,column=4, padx=3)
-yawp=Button(frame3, command = lambda: button_func('ATC_RAT_YAW_P',entry_string))
-yawp.grid(row=0,column=5, padx=15)
+pitchp=Label(frame3)
+pitchp.grid(row=0,column=5)
+Button(frame3, text='+', command = lambda: button_func('ATC_RAT_PIT_P',entry_string,1)).grid(row=0,column=6)
+Button(frame3, text='-', command = lambda: button_func('ATC_RAT_PIT_P',entry_string,-1)).grid(row=0,column=7)
 Label(frame3, text='I').grid(row=1,column=4, padx=3)
-yawi=Button(frame3, command = lambda: button_func('ATC_RAT_YAW_I',entry_string))
-yawi.grid(row=1,column=5, padx=15)
+pitchi=Label(frame3)
+pitchi.grid(row=1,column=5)
+Button(frame3, text='+', command = lambda: button_func('ATC_RAT_PIT_I',entry_string,1)).grid(row=1,column=6)
+Button(frame3, text='-', command = lambda: button_func('ATC_RAT_PIT_I',entry_string,-1)).grid(row=1,column=7)
 Label(frame3, text='D').grid(row=2,column=4, padx=3)
-yawd=Button(frame3, command = lambda: button_func('ATC_RAT_YAW_D',entry_string))
-yawd.grid(row=2,column=5, padx=15)
+pitchd=Label(frame3)
+pitchd.grid(row=2,column=5)
+Button(frame3, text='+', command = lambda: button_func('ATC_RAT_PIT_D',entry_string,1)).grid(row=2,column=6)
+Button(frame3, text='-', command = lambda: button_func('ATC_RAT_PIT_D',entry_string,-1)).grid(row=2,column=7)
+
+Label(frame2, text='Rate Yaw', bg='green').grid(row=0,column=2,padx=50,pady=10) #yaw
+Label(frame3, text='P').grid(row=0,column=8, padx=3)
+yawp=Label(frame3)
+yawp.grid(row=0,column=9)
+Button(frame3, text='+', command = lambda: button_func('ATC_RAT_YAW_P',entry_string,1)).grid(row=0,column=10)
+Button(frame3, text='-', command = lambda: button_func('ATC_RAT_YAW_P',entry_string,-1)).grid(row=0,column=11)
+Label(frame3, text='I').grid(row=1,column=8, padx=3)
+yawi=Label(frame3)
+yawi.grid(row=1,column=9)
+Button(frame3, text='+', command = lambda: button_func('ATC_RAT_YAW_I',entry_string,1)).grid(row=1,column=10)
+Button(frame3, text='-', command = lambda: button_func('ATC_RAT_YAW_I',entry_string,-1)).grid(row=1,column=11)
+Label(frame3, text='D').grid(row=2,column=8, padx=3)
+yawd=Label(frame3)
+yawd.grid(row=2,column=9, padx=15)
+Button(frame3, text='+', command = lambda: button_func('ATC_RAT_YAW_D',entry_string,1)).grid(row=2,column=10)
+Button(frame3, text='-', command = lambda: button_func('ATC_RAT_YAW_D',entry_string,-1)).grid(row=2,column=11)
 
 exit=Button(frame3, text='EXIT', command = lambda: exitgui())
 exit.grid(row=3,column=5, padx=15)
