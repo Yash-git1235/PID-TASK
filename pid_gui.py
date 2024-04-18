@@ -33,7 +33,7 @@ def setdefault():
     pwrite('ATC_RAT_YAW_D',0.000)
 
 ch3=-1
-ch3=int(input("Press 1 to load pwrite pid values: "))
+ch3=int(input("Press 1 to load default pid values: "))
 if (ch3):
     setdefault()
 else:
