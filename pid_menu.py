@@ -1,6 +1,4 @@
 import time
-import sys
-import re
 from tkinter import *
 
 # Import mavutil
@@ -86,19 +84,21 @@ def cmd_set_home(home_location, altitude):
         int((home_location[0])*10**7), # lat
         int((home_location[1])*10**7), # lon
         0.000000)
-
-tfound=0; rtlfound=0
+ 
 def uploadmission(aFileName):
     home_location = None
     home_altitude = None
     with open(aFileName) as f:
+        t=0
+        size=len(f.readlines())
+        f.seek(0)
         for i, line in enumerate(f):
             if i==0:
                 if not line.startswith('QGC WPL 110'):
                     raise Exception('File is not supported WP version')
             else:   
                 linearray=line.split('\t')
-                ln_seq = int(linearray[0])
+                ln_seq = int(linearray[0])+t
                 ln_current = int(linearray[1])
                 ln_frame = int(linearray[2])
                 ln_command = int(linearray[3])
@@ -110,20 +110,32 @@ def uploadmission(aFileName):
                 ln_y=float(linearray[9])
                 ln_z=float(linearray[10])
                 ln_autocontinue = int(linearray[11].strip())
-                if(ln_command==22):
-                    global tfound
-                    tfound=1
-                if(ln_command==20):
-                    global rtlfound
-                    rtlfound=1
-                if(i == 1):
+                if(i==1):
                     home_location = (ln_x,ln_y)
                     home_altitude = ln_z
-                p = mavutil.mavlink.MAVLink_mission_item_message(master.target_system, master.target_component, ln_seq, ln_frame,
-                                                                ln_command,
-                                                                ln_current, ln_autocontinue, ln_param1, ln_param2, ln_param3, ln_param4, ln_x, ln_y, ln_z)
-                wp.add(p)
-                                             
+                if(i==2 and ln_command!=22): #check for takeoff cmd in wp file
+                    t=1
+                elif(t==1 and i==3): #add takeoff cmd if not present
+                    p_tkf = mavutil.mavlink.MAVLink_mission_item_message(master.target_system, master.target_component, ln_seq-1, ln_frame, 22,
+                                                                    ln_current, ln_autocontinue, ln_param1, ln_param2, ln_param3, ln_param4, home_location[0], home_location[1], ln_z)
+                    wp.add(p_tkf)
+                    print("Takeoff command added.")
+                    p = mavutil.mavlink.MAVLink_mission_item_message(master.target_system, master.target_component, ln_seq, ln_frame,ln_command,
+                                                                    ln_current, ln_autocontinue, ln_param1, ln_param2, ln_param3, ln_param4, ln_x, ln_y, ln_z)
+                    wp.add(p)
+                elif(i==size-1 and ln_command!=20): #check and add RTL cmd if not present
+                    p = mavutil.mavlink.MAVLink_mission_item_message(master.target_system, master.target_component, ln_seq, ln_frame,ln_command,
+                                                                    ln_current, ln_autocontinue, ln_param1, ln_param2, ln_param3, ln_param4, ln_x, ln_y, ln_z)
+                    wp.add(p)
+                    ln_command=20
+                    p_rtl = mavutil.mavlink.MAVLink_mission_item_message(master.target_system, master.target_component, ln_seq+1, ln_frame, ln_command,
+                                                                    ln_current, ln_autocontinue, ln_param1, ln_param2, ln_param3, ln_param4, home_location[0], home_location[1], 0)
+                    wp.add(p_rtl)
+                    print("RTL command added.")
+                else: #add wp
+                    p = mavutil.mavlink.MAVLink_mission_item_message(master.target_system, master.target_component, ln_seq, ln_frame,ln_command,
+                                                                    ln_current, ln_autocontinue, ln_param1, ln_param2, ln_param3, ln_param4, ln_x, ln_y, ln_z)
+                    wp.add(p)
     cmd_set_home(home_location,home_altitude)
     msg = master.recv_match(type = 'COMMAND_ACK',blocking = True)
     print(msg)
@@ -143,40 +155,14 @@ def uploadmission(aFileName):
         print('Sending waypoint {0}'.format(msg.seq))
 
 
-uploadmission('/home/yash/Downloads/randomTRTL.waypoints')
-
-#takeoff
-if(tfound==0):
-    master.mav.command_long_send(
-        master.target_system,
-        master.target_component,
-        mavutil.mavlink.MAV_CMD_NAV_TAKEOFF, 0, 0, 0, 0, 0,
-        13.0302279,
-        77.5665213,
-        10)
-    msg = master.recv_match(type='COMMAND_ACK', blocking=True)
-    print(msg)
+uploadmission('your_wp_file_here')
 
 def pread(param_name):
-    try:
-        # Create a MAVLink connection
-        master = mavutil.mavlink_connection(connection_string)
-        master.wait_heartbeat()
-        # Request the specific parameter
-        master.param_fetch_one(param_name)
-
-        # Wait for the parameter value to be received
-        param_value_msg = master.recv_match(type='PARAM_VALUE', blocking=True)
-
-        # Print the parameter name and value
-        if param_value_msg is not None:
-            param_value = param_value_msg.param_value
-            #print(f"{param_name}: {param_value}")
-        else:
-            print(f"Parameter '{param_name}' not found.")
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
+    master = mavutil.mavlink_connection(connection_string)
+    master.wait_heartbeat()
+    master.param_fetch_one(param_name)
+    param_value_msg = master.recv_match(type='PARAM_VALUE', blocking=True)
+    param_value = param_value_msg.param_value
     return param_value
 
 '''def pread(param_name):
@@ -208,12 +194,14 @@ def pwrite(pname,value):
     print(f"new value={pread(pname)}")
 
 #start automission
+time.sleep(1)
+master.wait_heartbeat()
 master.mav.command_long_send(master.target_system, master.target_component,
                                 300 , 0, 0, 0, 0, 0, 0, 0, 0)
 msg = master.recv_match(type='COMMAND_ACK', blocking=True)
 print(msg)
 
-
+#menu
 ch='y'
 while(ch=='y'):
     print(f"1.ROLL P= {round(pread('ATC_RAT_RLL_P'),6)}",end='\t\t')
@@ -250,12 +238,3 @@ while(ch=='y'):
     else:
         print("Enter correct option")
     ch=input("stay?")
-
-#rtl
-if(rtlfound==0):
-    master.mav.command_long_send(
-    master.target_system,
-    master.target_component,
-    20, 0, 0, 0, 0, 0, 0, 0, 0)
-    msg = master.recv_match(type='COMMAND_ACK', blocking=True)
-    print(msg)
