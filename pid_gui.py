@@ -12,7 +12,7 @@ master = mavutil.mavlink_connection('udp:127.0.0.1:14551')
 # Wait a heartbeat before sending commands
 master.wait_heartbeat()
 
-def default(pname,value):
+def pwrite(pname,value):
     master.mav.param_set_send(
     master.target_system,
     master.target_component,
@@ -22,18 +22,18 @@ def default(pname,value):
     )
 
 def setdefault():
-    default('ATC_RAT_RLL_P',0.135)
-    default('ATC_RAT_RLL_I',0.135)
-    default('ATC_RAT_RLL_D',0.0036)
-    default('ATC_RAT_PIT_P',0.135)
-    default('ATC_RAT_PIT_I',0.135)
-    default('ATC_RAT_PIT_D',0.0036)
-    default('ATC_RAT_YAW_P',0.180)
-    default('ATC_RAT_YAW_I',0.018)
-    default('ATC_RAT_YAW_D',0.000)
+    pwrite('ATC_RAT_RLL_P',0.135)
+    pwrite('ATC_RAT_RLL_I',0.135)
+    pwrite('ATC_RAT_RLL_D',0.0036)
+    pwrite('ATC_RAT_PIT_P',0.135)
+    pwrite('ATC_RAT_PIT_I',0.135)
+    pwrite('ATC_RAT_PIT_D',0.0036)
+    pwrite('ATC_RAT_YAW_P',0.180)
+    pwrite('ATC_RAT_YAW_I',0.018)
+    pwrite('ATC_RAT_YAW_D',0.000)
 
 ch3=-1
-ch3=int(input("Press 1 to load default pid values: "))
+ch3=int(input("Press 1 to load pwrite pid values: "))
 if (ch3):
     setdefault()
 else:
@@ -79,7 +79,7 @@ def cmd_set_home(home_location, altitude):
         master.target_system, master.target_component,
         mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT,
         mavutil.mavlink.MAV_CMD_DO_SET_HOME,
-        0, 0, # default 0
+        0, 0, # pwrite 0
         0, # param1
         0, # param2
         0, # param3
@@ -160,9 +160,9 @@ def uploadmission(aFileName):
 
 uploadmission('your_waypoint_file_here')
 
-def pread(param_name):
-    #master = mavutil.mavlink_connection(connection_string)
-    master.wait_heartbeat()
+def pread(param_name, hb):
+    if(hb):
+        master.wait_heartbeat()
     master.param_fetch_one(param_name)
     param_value_msg = master.recv_match(type='PARAM_VALUE', blocking=True)
     param_value = param_value_msg.param_value
@@ -178,24 +178,25 @@ print(msg)
 
 tms=500 #refresh rate (ms)
 def update():
-    a=pread('ATC_RAT_RLL_P')
-    rollp.config(text=round(a,6))
-    b=pread('ATC_RAT_RLL_I')
-    rolli.config(text=round(b,6))
-    c=pread('ATC_RAT_RLL_D')
-    rolld.config(text=round(c,6))
-    d=pread('ATC_RAT_PIT_P')
-    pitchp.config(text=round(d,6))
-    e=pread('ATC_RAT_PIT_I')
-    pitchi.config(text=round(e,6))
-    f=pread('ATC_RAT_PIT_D')
-    pitchd.config(text=round(f,6))
-    g=pread('ATC_RAT_YAW_P')
-    yawp.config(text=round(g,6))
-    h=pread('ATC_RAT_YAW_I')
-    yawi.config(text=round(h,6))
-    i=pread('ATC_RAT_YAW_D')
-    yawd.config(text=round(i,6))
+    master.wait_heartbeat()
+    a=pread('ATC_RAT_RLL_P',0)
+    rollp.config(text="{:.{}f}".format(a, 4))
+    b=pread('ATC_RAT_RLL_I',0)
+    rolli.config(text="{:.{}f}".format(b, 4))
+    c=pread('ATC_RAT_RLL_D',0)
+    rolld.config(text="{:.{}f}".format(c, 4))
+    d=pread('ATC_RAT_PIT_P',0)
+    pitchp.config(text="{:.{}f}".format(d, 4))
+    e=pread('ATC_RAT_PIT_I',0)
+    pitchi.config(text="{:.{}f}".format(e, 4))
+    f=pread('ATC_RAT_PIT_D',0)
+    pitchd.config(text="{:.{}f}".format(f, 4))
+    g=pread('ATC_RAT_YAW_P',0)
+    yawp.config(text="{:.{}f}".format(g, 4))
+    h=pread('ATC_RAT_YAW_I',0)
+    yawi.config(text="{:.{}f}".format(h, 4))
+    i=pread('ATC_RAT_YAW_D',0)
+    yawd.config(text="{:.{}f}".format(i, 4))
     root.after(tms, update)
     
 
@@ -222,7 +223,7 @@ def button_func(pname, entry_string, type):
     print(pname)
     perc=float(entry_string.get())/100
     print(f'percentage={perc}')
-    read=(pread(pname))
+    read=(pread(pname,1))
     print(f"old value={read}")
     n=1
     if(type==1):
@@ -233,13 +234,7 @@ def button_func(pname, entry_string, type):
     elif(type==-1):
         setval=read*(1-perc)
     print(f'new value={setval}')
-    master.mav.param_set_send(
-    master.target_system,
-    master.target_component,
-    pname.encode('utf-8'),  # Parameter name
-    setval,  # Custom rate value
-    mavutil.mavlink.MAV_PARAM_TYPE_UINT16  # Parameter type
-    )
+    pwrite(pname,setval)
 
 def exitgui():
     root.destroy()
