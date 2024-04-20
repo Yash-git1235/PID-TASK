@@ -1,4 +1,8 @@
 import time
+from datetime import datetime, timezone, timedelta
+import sys
+import re
+import asyncio
 from tkinter import *
 
 # Import mavutil
@@ -12,6 +16,14 @@ master = mavutil.mavlink_connection('udp:127.0.0.1:14551')
 # Wait a heartbeat before sending commands
 master.wait_heartbeat()
 
+def pread(param_name, hb):
+    if(hb):
+        master.wait_heartbeat()
+    master.param_fetch_one(param_name)
+    param_value_msg = master.recv_match(type='PARAM_VALUE', blocking=True)
+    param_value = param_value_msg.param_value
+    return param_value
+
 def pwrite(pname,value):
     master.mav.param_set_send(
     master.target_system,
@@ -21,23 +33,52 @@ def pwrite(pname,value):
     mavutil.mavlink.MAV_PARAM_TYPE_UINT16  # Parameter type
     )
 
-def setdefault():
-    pwrite('ATC_RAT_RLL_P',0.135)
-    pwrite('ATC_RAT_RLL_I',0.135)
-    pwrite('ATC_RAT_RLL_D',0.0036)
-    pwrite('ATC_RAT_PIT_P',0.135)
-    pwrite('ATC_RAT_PIT_I',0.135)
-    pwrite('ATC_RAT_PIT_D',0.0036)
-    pwrite('ATC_RAT_YAW_P',0.180)
-    pwrite('ATC_RAT_YAW_I',0.018)
-    pwrite('ATC_RAT_YAW_D',0.000)
+def save(comment):
+    utc_now = datetime.now(timezone.utc)
+    IST_offset = timedelta(hours=5, minutes=30)
+    IST_timezone = timezone(IST_offset)
+    ist_now = utc_now.astimezone(IST_timezone)
+    formatted_ist_now = ist_now.strftime("%d/%m/%Y %H:%M:%S")
+    print("Date and Time:", formatted_ist_now)
+    file = open('pidsave.txt', 'a+')
+    file.seek(0)
+    content=file.read()
+    file = open('pidsave.txt', 'w+')
+    file.seek(0)
+    global rllp_def, rlli_def, rlld_def, pitp_def, piti_def, pitd_def, yawp_def, yawi_def, yawd_def
+    master.wait_heartbeat()
+    rllp_def=pread("ATC_RAT_RLL_P",0)
+    rlli_def=pread("ATC_RAT_RLL_I",0)
+    rlld_def=pread("ATC_RAT_RLL_D",0)
+    pitp_def=pread("ATC_RAT_PIT_P",0)
+    piti_def=pread("ATC_RAT_PIT_I",0)
+    pitd_def=pread("ATC_RAT_PIT_D",0)
+    yawp_def=pread("ATC_RAT_YAW_P",0)
+    yawi_def=pread("ATC_RAT_YAW_I",0)
+    yawd_def=pread("ATC_RAT_YAW_D",0)
+    file.write(f'{formatted_ist_now}\t{rllp_def}\t{rlli_def}\t{rlld_def}\t{pitp_def}\t{piti_def}\t{pitd_def}\t{yawp_def}\t{yawi_def}\t{yawd_def}\t{comment}\n')
+    file.write(content)
+    print("Current PID values stored")
+    #print(f'{formatted_ist_now}\t{rllp_def}\t{rlli_def}\t{rlld_def}\t{pitp_def}\t{piti_def}\t{pitd_def}\t{yawp_def}\t{yawi_def}\t{yawd_def}\t{comment}\n')
+save("Mission Start Save")
 
-ch3=-1
-ch3=int(input("Press 1 to load default pid values: "))
-if (ch3):
-    setdefault()
-else:
-    pass
+def roll_default():
+    pwrite('ATC_RAT_RLL_P',rllp_def)
+    pwrite('ATC_RAT_RLL_I',rlli_def)
+    pwrite('ATC_RAT_RLL_D',rlld_def)
+    print("Roll values set to default")
+
+def pitch_default():
+    pwrite('ATC_RAT_PIT_P',pitp_def)
+    pwrite('ATC_RAT_PIT_I',piti_def)
+    pwrite('ATC_RAT_PIT_D',pitd_def)
+    print("Pitch values set to default")
+
+def yaw_default():
+    pwrite('ATC_RAT_YAW_P',yawp_def)
+    pwrite('ATC_RAT_YAW_I',yawi_def)
+    pwrite('ATC_RAT_YAW_D',yawd_def)
+    print("Yaw values set to default")
 
 #flight mode 5(loiter)
 time.sleep(1)
@@ -158,15 +199,7 @@ def uploadmission(aFileName):
         print('Sending waypoint {0}'.format(msg.seq))
 
 
-uploadmission('your_waypoint_file_here')
-
-def pread(param_name, hb):
-    if(hb):
-        master.wait_heartbeat()
-    master.param_fetch_one(param_name)
-    param_value_msg = master.recv_match(type='PARAM_VALUE', blocking=True)
-    param_value = param_value_msg.param_value
-    return param_value
+uploadmission('/home/yash/Downloads/randomog.waypoints')
 
 #start automission
 time.sleep(1)
@@ -214,12 +247,16 @@ frame3=Frame(root)
 frame3.pack()
 
 frame4=Frame(root)
-frame4.pack(side='right')
+frame4.pack()
+
+frame5=Frame(root)
+frame5.pack(side='right')
 
 w = Label(frame1, text='Enter rate change percentage:')
 w.grid(row=0,column=0)
 
 def button_func(pname, entry_string, type):
+    global color
     print(pname)
     perc=float(entry_string.get())/100
     print(f'percentage={perc}')
@@ -235,7 +272,6 @@ def button_func(pname, entry_string, type):
         setval=read*(1-perc)
     print(f'new value={setval}')
     pwrite(pname,setval)
-
 def exitgui():
     root.destroy()
 
@@ -259,6 +295,8 @@ rolld=Label(frame3)
 rolld.grid(row=2,column=1)
 Button(frame3, text='+', command = lambda: button_func('ATC_RAT_RLL_D',entry_string,1)).grid(row=2,column=2)
 Button(frame3, text='-', command = lambda: button_func('ATC_RAT_RLL_D',entry_string,-1)).grid(row=2,column=3)
+Button(frame4, text='RESET', command = lambda: roll_default()).grid(row=0, column=0, padx=50, pady=3)
+
 
 Label(frame2, text='Rate Pitch', bg='green').grid(row=0,column=1,padx=50,pady=10) #pitch
 Label(frame3, text='P').grid(row=0,column=4, padx=3)
@@ -276,6 +314,7 @@ pitchd=Label(frame3)
 pitchd.grid(row=2,column=5)
 Button(frame3, text='+', command = lambda: button_func('ATC_RAT_PIT_D',entry_string,1)).grid(row=2,column=6)
 Button(frame3, text='-', command = lambda: button_func('ATC_RAT_PIT_D',entry_string,-1)).grid(row=2,column=7)
+Button(frame4, text='RESET', command = lambda: pitch_default()).grid(row=0, column=1, padx=50, pady=3)
 
 Label(frame2, text='Rate Yaw', bg='green').grid(row=0,column=2,padx=50,pady=10) #yaw
 Label(frame3, text='P').grid(row=0,column=8, padx=3)
@@ -293,12 +332,14 @@ yawd=Label(frame3)
 yawd.grid(row=2,column=9, padx=15)
 Button(frame3, text='+', command = lambda: button_func('ATC_RAT_YAW_D',entry_string,1)).grid(row=2,column=10)
 Button(frame3, text='-', command = lambda: button_func('ATC_RAT_YAW_D',entry_string,-1)).grid(row=2,column=11)
+Button(frame4, text='RESET', command = lambda: yaw_default()).grid(row=0, column=2, padx=50, pady=3)
 
-reset=Button(frame4, text='RELOAD DEFAULTS', command = lambda: setdefault())
-reset.grid(row=0, column=0, pady=20)
-
-exit=Button(frame4, text='EXIT', command = lambda: exitgui())
-exit.grid(row=0,column=1, pady=20, padx=40)
+entry_string2 = StringVar(value = 'Comments')
+e2=Entry(frame5, cursor='circle', textvariable = entry_string2, width= 25)
+e2.grid(row=0,column=0)
+Button(frame5, text='SAVE', command = lambda: save(entry_string2.get())).grid(row=0, column=1, pady=10)
+exit=Button(frame5, text='EXIT', command = lambda: exitgui())
+exit.grid(row=0,column=2, pady=10, padx=40)
 
 update()
 root.mainloop()
